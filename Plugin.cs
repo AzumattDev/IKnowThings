@@ -15,7 +15,7 @@ namespace IKnowThings
     public class IKnowThingsPlugin : BaseUnityPlugin
     {
         internal const string ModName = "IKnowThings";
-        internal const string ModVersion = "1.0.0";
+        internal const string ModVersion = "1.0.1";
         internal const string Author = "Azumatt";
         private const string ModGUID = Author + "." + ModName;
 
