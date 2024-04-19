@@ -1,9 +1,9 @@
 {
   "name": "IKnowThings",
-  "version_number": "1.0.1",
+  "version_number": "1.0.2",
   "website_url": "https://discord.gg/pdHgy6Bsng",
   "description": "A client-side mod that adds two console commands (Admin Only) for learning recipes, crafting stations, and build pieces. Good for debugging and testing when not wanting to use creative mode.",
   "dependencies": [
-    "denikson-BepInExPack_Valheim-5.4.2200"
+    "denikson-BepInExPack_Valheim-5.4.2202"
   ]
 }

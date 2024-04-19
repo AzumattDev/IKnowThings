@@ -10,6 +10,10 @@
 
 `unlearnrecipes` - Unlearn all recipes in the game.
 
+`learnbycategory` - Learn all recipes in a specific category.
+
+`learnbystation` - Learn all recipes that can be crafted at a specific station.
+
 ---
 
 <details>

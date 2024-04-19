@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
@@ -15,7 +16,7 @@ namespace IKnowThings
     public class IKnowThingsPlugin : BaseUnityPlugin
     {
         internal const string ModName = "IKnowThings";
-        internal const string ModVersion = "1.0.1";
+        internal const string ModVersion = "1.0.2";
         internal const string Author = "Azumatt";
         private const string ModGUID = Author + "." + ModName;
 
@@ -67,16 +68,70 @@ namespace IKnowThings
     {
         static void Postfix(Terminal __instance)
         {
-            Command("learnrecipes", "Learns all recipes for your player. Only admins can execute this command", (args) =>
+            AddLearnAllCommand();
+            AddUnlearnAllCommand();
+            AddLearnCategoryCommand();
+            AddLearnStationCommand();
+        }
+
+        private static void AddLearnAllCommand()
+        {
+            Command("learnrecipes", "Learns all recipes for your player. Only admins can execute this command", args => { LearnOrUnlearnAllRecipes(args, true); });
+        }
+
+        private static void AddUnlearnAllCommand()
+        {
+            Command("unlearnrecipes", "Un-Learns all recipes for your player. Only admins can execute this command", args => { LearnOrUnlearnAllRecipes(args, false); });
+        }
+
+        private static void AddLearnCategoryCommand()
+        {
+            Command("learnbycategory", "Learns recipes by category. Only admins can execute this command", args =>
             {
-                if (Admin.Enabled)
+                if (args.Length < 1)
                 {
-                    Player? player = Player.m_localPlayer;
-                    int recipeCount = 0;
-                    int stationCount1 = 0;
-                    int stationCount2 = 0;
-                    int pieceCount = 0;
-                    if (player != null && ObjectDB.instance != null)
+                    AddError(args.Context, "You must provide a category (e.g., 'weapons', 'armor').");
+                    return;
+                }
+
+                string category = args[0];
+                LearnOrUnlearnRecipesByCategory(args, category, true);
+            }, () => Enum.GetNames(typeof(ItemDrop.ItemData.ItemType)).ToList());
+        }
+
+        private static void AddLearnStationCommand()
+        {
+            Command("learnbystation", "Learns recipes by station. Only admins can execute this command", args =>
+            {
+                if (args.Length < 1)
+                {
+                    AddError(args.Context, "You must provide a station name (e.g., 'workbench', 'forge').");
+                    return;
+                }
+
+                string stationName = args[0];
+                LearnOrUnlearnRecipesByStation(args, stationName, true);
+            }, () =>
+            {
+                var stations = Resources.FindObjectsOfTypeAll<CraftingStation>().Select(r => r?.m_name).Distinct().ToList();
+                stations.Remove(null);
+                return stations;
+            });
+        }
+
+
+        private static void LearnOrUnlearnAllRecipes(Terminal.ConsoleEventArgs args, bool learn)
+        {
+            if (Admin.Enabled)
+            {
+                Player? player = Player.m_localPlayer;
+                int recipeCount = 0;
+                int stationCount1 = 0;
+                int stationCount2 = 0;
+                int pieceCount = 0;
+                if (player != null && ObjectDB.instance != null)
+                {
+                    if (learn)
                     {
                         foreach (Recipe recipe in ObjectDB.instance.m_recipes)
                         {
@@ -128,19 +183,7 @@ namespace IKnowThings
                         IKnowThingsPlugin.IKnowThingsLogger.LogInfo($"Learned {recipeCount} recipes, {pieceCount} pieces, {stationCount1 + stationCount2} stations ({stationCount1} upgraded, {stationCount2} new) and 0 life lessons");
                         args.Context.AddString($"Learned {recipeCount} recipes, {pieceCount} pieces, {stationCount1 + stationCount2} stations ({stationCount1} upgraded, {stationCount2} new) and 0 life lessons");
                     }
-                }
-                else
-                {
-                    args.Context.AddString("You must be an admin to use this command");
-                }
-            });
-
-            Command("unlearnrecipes", "Un-Learns all recipes for your player. Only admins can execute this command", (args) =>
-            {
-                if (Admin.Enabled)
-                {
-                    Player? player = Player.m_localPlayer;
-                    if (player != null && ObjectDB.instance != null)
+                    else
                     {
                         player.m_knownRecipes.Clear();
                         player.m_knownStations.Clear();
@@ -152,12 +195,99 @@ namespace IKnowThings
                         args.Context.AddString($"Reset all recipes, pieces, stations and life lessons");
                     }
                 }
-                else
-                {
-                    args.Context.AddString("You must be an admin to use this command");
-                }
-            });
+            }
+            else
+            {
+                args.Context.AddString("You must be an admin to use this command");
+            }
         }
+
+        private static void LearnOrUnlearnRecipesByCategory(Terminal.ConsoleEventArgs args, string category, bool learn)
+        {
+            if (!Admin.Enabled)
+            {
+                AddError(args.Context, "You must be an admin to use this command");
+                return;
+            }
+
+            Player? player = Player.m_localPlayer;
+            if (player != null && ObjectDB.instance != null)
+            {
+                int count = 0;
+                foreach (Recipe recipe in ObjectDB.instance.m_recipes)
+                {
+                    if (recipe.m_item.m_itemData.m_shared.m_itemType.ToString() != category) continue;
+
+                    string? recipeName = recipe.m_item?.m_itemData?.m_shared?.m_name;
+                    if (string.IsNullOrWhiteSpace(recipeName)) continue;
+
+                    if (learn)
+                    {
+                        if (!player.m_knownRecipes.Contains(recipeName))
+                        {
+                            player.m_knownRecipes.Add(recipeName);
+                            player.UpdateKnownRecipesList();
+                        }
+                    }
+                    else
+                    {
+                        if (player.m_knownRecipes.Contains(recipeName))
+                        {
+                            player.m_knownRecipes.Remove(recipeName);
+                            player.UpdateKnownRecipesList();
+                        }
+                    }
+
+                    count++;
+                }
+
+                AddMessage(args.Context, $"Processed {count} recipes in the category {category}");
+            }
+        }
+
+        private static void LearnOrUnlearnRecipesByStation(Terminal.ConsoleEventArgs args, string stationName, bool learn)
+        {
+            if (!Admin.Enabled)
+            {
+                AddError(args.Context, "You must be an admin to use this command");
+                return;
+            }
+
+            Player? player = Player.m_localPlayer;
+            if (player != null && ObjectDB.instance != null)
+            {
+                int count = 0;
+                foreach (Recipe recipe in ObjectDB.instance.m_recipes)
+                {
+                    if (recipe.m_craftingStation?.m_name != stationName) continue;
+
+                    string? recipeName = recipe.m_item?.m_itemData?.m_shared?.m_name;
+                    if (string.IsNullOrWhiteSpace(recipeName)) continue;
+
+                    if (learn)
+                    {
+                        if (!player.m_knownRecipes.Contains(recipeName))
+                        {
+                            player.m_knownRecipes.Add(recipeName);
+                            player.UpdateKnownRecipesList();
+                        }
+                    }
+                    else
+                    {
+                        if (player.m_knownRecipes.Contains(recipeName))
+                        {
+                            player.m_knownRecipes.Remove(recipeName);
+                            player.UpdateKnownRecipesList();
+                        }
+                    }
+
+                    count++;
+                }
+
+                AddMessage(args.Context, $"Processed {count} recipes for the station {stationName}");
+            }
+        }
+
 
         public static Terminal.ConsoleEvent Catch(Terminal.ConsoleEvent action) =>
             (args) =>
