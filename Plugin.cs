@@ -16,7 +16,7 @@ namespace IKnowThings
     public class IKnowThingsPlugin : BaseUnityPlugin
     {
         internal const string ModName = "IKnowThings";
-        internal const string ModVersion = "1.0.2";
+        internal const string ModVersion = "1.0.3";
         internal const string Author = "Azumatt";
         private const string ModGUID = Author + "." + ModName;
 
@@ -32,12 +32,15 @@ namespace IKnowThings
 
         public void Awake()
         {
+            DisableUnlockMessages = Config.Bind("1 - General", "DisableUnlockMessages", Toggle.Off, "Disables the messages that appear when you unlock a new recipe or item. Helps prevent spam when learning many recipes at once.");
             Assembly assembly = Assembly.GetExecutingAssembly();
             _harmony.PatchAll(assembly);
         }
 
 
         #region ConfigOptions
+
+        public static ConfigEntry<Toggle> DisableUnlockMessages = null!;
 
         private class ConfigurationManagerAttributes
         {
@@ -61,6 +64,15 @@ namespace IKnowThings
         }
 
         #endregion
+    }
+    
+    [HarmonyPatch(typeof(MessageHud),nameof(MessageHud.QueueUnlockMsg))]
+    static class MessageHudQueueUnlockMsgPatch
+    {
+        static bool Prefix(MessageHud __instance)
+        {
+            return IKnowThingsPlugin.DisableUnlockMessages.Value != IKnowThingsPlugin.Toggle.On;
+        }
     }
 
     [HarmonyPatch(typeof(Terminal), nameof(Terminal.InitTerminal))]
